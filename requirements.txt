@@ -1,0 +1,8 @@
+transformers
+datasets
+torch
+accelerate>=1.1.0
+scikit-learn
+google-api-python-client
+coral-pytorch
+lime

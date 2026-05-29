@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+.venv/
+venv/
+env/
+*.so
+
+# Data — never commit scraped content
+data/
+
+# Secrets / API keys
+.env
+*.env
+*.key
+*_key.txt
+secrets/
+
+# IDEs
+.idea/
+.vscode/
+.claude/
+*.swp
+*.swo
+.DS_Store
+
+# Jupyter checkpoints
+.ipynb_checkpoints/
+
+# Models (large binary files)
+models/**/*.bin
+models/**/*.pt
+models/**/*.safetensors

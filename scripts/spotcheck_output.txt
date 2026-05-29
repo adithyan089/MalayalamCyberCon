@@ -1,0 +1,89 @@
+﻿Total threads:           210
+likely_conflict=True:    41
+likely_conflict=False:   169
+Avg messages per thread: 4.4
+
+Intensity distribution:
+  [0] none          169 threads
+  [1] mild           27 threads
+  [2] insult          7 threads
+  [3] political       3 threads
+  [4] slur            3 threads
+  [5] threat          1 threads
+
+============================================================
+  NON-CONFLICT SAMPLE
+============================================================
+
+--- 1 | video=kD1KRq9Cw2I | intensity=0 | msgs=6 ---
+           Al ameen and Sagar Surya ഉണ്ടായതുകൊണ്ട് ഈ പടം മൊത്തം കണ്ടത് Njan 😂
+           Njanum😂
+           Me too
+           Avr Karanam kandu thudangi. Pakshe aaru karanavum theerkan pattanilla😭
+           അവന്മാർ ആണ് ഏറ്റവും വെറുപ്പീര്, ബാക്കി എല്ലാം കട്ട വെറുപ്പീര്
+  [TARGET] Pakshe sagar suriya yude kude ulla aavn anu poli ayirunu
+
+--- 2 | video=kD1KRq9Cw2I | intensity=0 | msgs=4 ---
+           Bruh I'm a genz kid and i felt like this movie more like millennial one lol and editing and ah oru vibe entho new movies
+           fr🐮😶😶😶
+           Fr😂
+  [TARGET] No content, no making, directorkk oru ideayum illa athaan 😂😂 Ee padathil first aa "thaana dhanthina" song engn aayrnnu i
+
+--- 3 | video=oeSM8BjPATo | intensity=0 | msgs=3 ---
+           Cheta...namude rachitha ram nte oru cinema cheyy..njaan etra kaalam kond oarayua..onullelum ningal channel thodangiyapo 
+           Rachitha Ram ന് അത്ര സ്റ്റാർ വാല്യൂ ഒക്കെ ഉണ്ടോടെ... അവരെ മാത്രം വെച്ചൊരു സിനിമ ചെയ്യാൻ 🫠
+  [TARGET] ​ die hard fan aanu sir avarude.... starvalue oke koravayrikum..ethelum nayakanmarde naayka aaytaanelum athoke vech oru 
+
+--- 4 | video=5WPflGKjALE | intensity=0 | msgs=6 ---
+           0:24 Respect അണ്ണാ... Respect... I liked that you accept your mistake... Great
+           Athe❤, but ith India aanu ivide bjp ye vimarshichal anti nationals onnum aavilla👍 sangikale orikkalum aduppikkilla
+           He is a സൂത്രശാലി കുറുക്കൻ. 2-3 ലക്ഷം മാസവരുമാനം കിട്ടുന്നത് പകുതി ആക്കുന്നത് എന്തിനാ ഒരു accept പറഞ്ഞാൽ മതിയല്ലോ എന്ന് 
+           ​ avante shambalam ennathe valla paniyum nokk
+           RSS കാരൻ ആണ് ഞാനും but അംഗീകരിച്ചു ❤️ക്ഷമ
+  [TARGET] Durandar 2 inte casil maappu parayenda karyam onnum illernn...veruthe vila kalanj.. Filmil kanicha sadhanam thanne alle 
+
+--- 5 | video=5WPflGKjALE | intensity=0 | msgs=5 ---
+           Bro നമ്മുക്ക് എല്ലാവർക്കും ചിലപ്പോൾ തെറ്റുകൾ പറ്റാം പക്ഷേ അതു ഏറ്റു പറയാനോ തിരുത്താനോ പലരും തയ്യാറാവില്ല.... bro അതിൽ നി
+           Absolutely atinu guts venam 🔥🫰..
+           പേടി 😂
+           അല്ലാതെ subscribers പോകും എന്നുള്ള പേടി അല്ല..അല്ലേ??
+  [TARGET] ​ avante pedi ahnu😂
+
+============================================================
+  HIGH-INTENSITY SAMPLE
+============================================================
+
+--- 1 | video=N4GVqdpCOEM | intensity=5 | msgs=6 ---
+           മോദിജി എന്ന ചായക്കാരൻ 😃😃😃
+           എന്നാലും കൂട്ടികൊടുപ്പുകാരൻ തള്ളാഹു അല്ലല്ലോ
+           മലദ്വാർ വന്നല്ലോ....
+           shivan ligam yoni deviyude kudiyil kalichavan
+           Jai sree ram maire
+  [TARGET] ninte Ammayude poor
+
+--- 2 | video=5WPflGKjALE | intensity=4 | msgs=4 ---
+           സുടാപ്പി സുടാപ്പി തന്നെ
+           Just explain how he is "sudappi"?
+           ​ െള്ളത്തിൽ_വീണ_പൂച്ചരാജ്യത്തെ നടന്ന കാര്യങ്ങൾ പറഞ്ഞാൽ അത് ഹിന്ദുത്വ അജണ്ട, സെലക്റ്റീവ് നിലപാടുകൾ ഇത്രയും പോരെ
+  [TARGET] ​ myre athinaanu avan sorry paranje nee ee video kaanaathe comment moonjalle😂
+
+--- 3 | video=9CeeuptsSQE | intensity=4 | msgs=3 ---
+           പടം roast ചെയ്യാൻ അന്നെകിൽ അതുമതി അല്ലാതെ ഒരുമാതിരി കുടുബസ്ത്രി കളിക്കരുത്. അവന്റെ ഒരു ombiya roast pari 🤮
+           Ninte Annante kidnap Jokes oke kett armadhikk ! 🎉
+  [TARGET] ​ najn nite paisa kondu alla myre movie kanda
+
+--- 4 | video=733tvqXHs_o | intensity=4 | msgs=5 ---
+           Athey oru spoof, kinda movie anu athinem roastunna 😅😂 nannayittund
+           😁
+           Spoof aanel athinte nilakk edkkanm .. allathe idakk serious aakum, idakk mass aura farming ondakan nokkm.. last onnm ill
+           eda myre athineyalle spoof enn parayunnath 🤦‍♂
+  [TARGET] ​ athupole oru spoof fan mashup mix movie eathu nilakk edukkanam ennanu bro paranjathenn enik mansilayittilla. Anyway ni
+
+--- 5 | video=5WPflGKjALE | intensity=3 | msgs=6 ---
+           I agree with u bro, Dhurandharil BJP propaganda undu, pinne athil kaanicha pala eventsinte timelineum thettanu.😊
+           Propaganda nu pollum nmda prime minister neh pinneh ndha thazthi parayano?
+           ​ 😂
+           Pakistan poy kuninj iruno😂
+           Nmda nadu umbu nadh ninneh polleh mandan maru ollond aa 😂 ndh annelum kolam😂😂😂
+  [TARGET] ​ UP okka nammal kura kaanarullatha avidutha pola parambil poyirunnu thootiyil enikku thootal varilla ninakku athokka sh
+

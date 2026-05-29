@@ -1,0 +1,524 @@
+================================================================================
+  MalayalamCyberCon — Complete Project Summary
+  Conflict & Cyberbullying Detection in Manglish YouTube Comments
+================================================================================
+
+AUTHORS
+  Adithyan (adithyanadi089@gmail.com)  +  teammate (annotation)
+  Final-Year B.Tech / MCA Project — 2026
+
+================================================================================
+  1. PROJECT OVERVIEW
+================================================================================
+
+TITLE
+  MalayalamCyberCon: A Dataset and Classifier for Detecting Conflict and
+  Cyberbullying in Manglish YouTube Comment Threads
+
+PROBLEM STATEMENT
+  Malayalam speakers on YouTube increasingly write in "Manglish" — Malayalam
+  language typed in Roman script, often code-mixed with English. This informal
+  register is almost entirely absent from existing NLP datasets. Toxic content
+  (insults, slurs, threats, sexual harassment, political hate speech) in this
+  register goes undetected by current moderation tools.
+
+OBJECTIVE
+  1. Build the first labeled dataset of Manglish YouTube comment threads
+     annotated for conflict and cyberbullying.
+  2. Fine-tune a multilingual transformer (MuRIL) to classify threads along
+     four dimensions: conflict presence, severity, type, and target.
+  3. Release the annotation pipeline and training code as open tooling.
+
+LANGUAGE / DOMAIN
+  - Language: Manglish (Malayalam in Roman script) + code-mixed English
+  - Domain: Malayalam YouTube comment sections (movies, celebrities, reality TV,
+    politics, food channels)
+  - Platform: YouTube (comments scraped via YouTube Data API v3)
+
+================================================================================
+  2. DATASET
+================================================================================
+
+COLLECTION
+  Source       : YouTube comment threads via YouTube Data API v3
+  Tool         : src/scrape_youtube.py
+  Raw threads  : 1,672 unique threads (scraped across multiple sessions)
+  Raw files    : data/raw_threads.jsonl  +  data/new_threads_batch.jsonl
+  Merge tool   : scripts/merge_jsonl.py  (deduplicates by thread_id)
+
+THREAD STRUCTURE
+  Each thread = a chain of ≥2 YouTube comments on the same root comment.
+  A "target message" is identified — the final or most salient comment —
+  and that message is what the annotator labels.
+
+  CSV format:
+    thread_id, video_id, num_messages, thread_text, target_message,
+    label_conflict, label_severity, label_type, label_target, notes
+
+AUTO-SCORING (pre-annotation filter)
+  Script scripts/spotcheck.py assigned a conflict_intensity score (0–5)
+  to each thread using keyword matching (slur lists, sexual terms, threat
+  phrases) to help prioritise annotation batches.
+
+ANNOTATION ROUNDS
+  Batch 1 (adithyanr)    : A0001–A0551   551 threads  [fully annotated]
+  Batch 2 (adithyanr2)   : A0552–A0851   300 threads  [fully annotated]
+  Batch 3 (adithyanr3)   : A0852–A1151   300 threads  [AI-annotated, reviewed]
+  Batch 4 (adithyanr4)   : A1152–A1451   300 threads  [AI-annotated, reviewed]
+  Batch 5 (adithyanr5)   : A1452–A1672   221 threads  [partially AI-annotated]
+  ─────────────────────────────────────────────────────────
+  TOTAL                  :             1,672 threads
+
+  Annotation tool : src/annotate.py  (interactive CLI, saves after every entry)
+  Adjudication    : scripts/adjudicate.py
+  Pilot           : 30 threads, 2 annotators
+    Cohen's κ (conflict) = 0.712  ✓
+    Cohen's κ (severity) = 0.405  ✓  (both above 0.4 threshold)
+
+ANNOTATION SCHEMA
+  label_conflict   : 0 = no conflict | 1 = conflict present
+  label_severity   : 1 = mild  |  2 = moderate  |  3 = severe
+                     (blank if conflict = 0)
+  label_type       : 1 = personal attack
+                     2 = political / communal
+                     3 = sexual / gendered
+                     4 = explicit threat
+                     (comma-separated multi-label allowed, e.g. "1,3")
+                     (blank if conflict = 0)
+  label_target     : 1 = another commenter
+                     2 = creator or public figure
+                     3 = community / group
+                     (blank if conflict = 0)
+  notes            : free-text (sarcasm, ambiguity flags, etc.)
+
+ANNOTATION GUIDELINES
+  Full guide : data/annotations/ANNOTATION_GUIDE.txt
+  Key rules  :
+    - Criticising a film ≠ conflict; attacking a person = conflict
+    - Slurs/sexual content/threats = severity 3 regardless of context
+    - Playful banter ≠ conflict even if slightly rude
+    - If conflict=0 leave all sub-labels blank (do NOT write 0)
+
+FINAL DATASET STATISTICS  (after preprocessing / clean.csv)
+  Total threads  : 1,669  (3 dropped: blank target_message)
+  conflict = 0   : 1,150  (68.9 %)
+  conflict = 1   :   519  (31.1 %)
+
+  Severity (conflict=1 only, 0-indexed in splits):
+    mild     (0) : 197  (38.0 %)
+    moderate (1) : 196  (37.8 %)
+    severe   (2) : 126  (24.3 %)
+    NOTE: annotation_FINAL.csv stores 1/2/3; preprocess.py remaps to 0/1/2.
+          No annotation errors — all 519 conflict=1 rows have valid severity.
+
+  Type (conflict=1, single-label 0-indexed after multi-label resolution):
+    personal       (0) : 358  (69.0 %)
+    sexual/gendered(2) :  80  (15.4 %)  [incl. 2 multi-label resolved to type 2]
+    political      (1) :  67  (12.9 %)
+    threat         (3) :  14  ( 2.7 %)
+    NOTE: 2 original multi-label entries (1,3 and 2,3) resolved to highest-priority
+          type by preprocess.py (priority: threat > sexual > political > personal).
+
+  Target (conflict=1):
+    another commenter (1)  : 246  (47.4 %)
+    creator/public fig (2) : 191  (36.8 %)
+    community/group   (3)  :  82  (15.8 %)
+    (all 519 conflict=1 rows have a target label)
+
+TRAIN / VAL / TEST SPLIT
+  Script     : scripts/preprocess.py
+  Strategy   : Stratified on label_conflict (preserves ~69/31 ratio)
+  Ratios     : 70 % / 15 % / 15 %
+
+  train.csv  : 1,168 rows  conflict=1: 363 (31 %)  conflict=0: 805 (69 %)
+  val.csv    :   249 rows  conflict=1:  77 (31 %)  conflict=0: 172 (69 %)
+  test.csv   :   252 rows  conflict=1:  79 (31 %)  conflict=0: 173 (69 %)
+
+  Severity in training split (conflict=1 only, n=363):
+    mild(0): 147  moderate(1): 129  severe(2): 87
+  Type in training split (conflict=1 only, n=363):
+    personal(0): 253  political(1): 46  sexual/gendered(2): 58  threat(3): 6
+
+  Files saved to : data/splits/
+
+================================================================================
+  3. MODEL
+================================================================================
+
+BASE MODEL
+  google/muril-base-cased
+  - 12 transformer layers, 768 hidden dim, 12 attention heads
+  - Vocab: 197,285 tokens (covers Malayalam, Hindi, Bengali + 15 Indian langs)
+  - Pre-trained on Wikipedia + Common Crawl for 17 Indian languages
+  - Chosen over xlm-roberta-base because MuRIL was specifically trained on
+    Indian language text including transliterated Manglish content
+
+  Rationale over other models:
+    xlm-roberta-base  : trained mostly on Wikipedia, poor Manglish coverage
+    IndicBERT         : no Roman-script Malayalam in training
+    MuRIL-base-cased  : best fit — explicitly covers transliterated Indian langs
+
+ARCHITECTURE
+  Three separate fine-tuned classifiers (one per sub-task):
+
+  CONFLICT MODEL
+    Type      : BertForSequenceClassification (2 labels)
+    Input     : full thread_text (all messages concatenated)
+    Output    : P(no_conflict), P(conflict)
+    Loss      : Weighted CrossEntropyLoss
+    Labels    : 0 = no conflict, 1 = conflict
+
+  SEVERITY MODEL
+    Type      : BertForSequenceClassification (4 labels)
+    Input     : thread_text (conflict=1 rows only)
+    Output    : logits for [none, mild, moderate, severe]
+    Loss      : Weighted CrossEntropyLoss (weight[0]=0 since class 0 not present)
+    Labels    : 0 = none (padded), 1 = mild, 2 = moderate, 3 = severe
+
+  TYPE MODEL
+    Type      : BertForSequenceClassification (4 labels, multi-label)
+    Input     : thread_text (conflict=1 rows only)
+    Output    : sigmoid probabilities for each type
+    Loss      : BCEWithLogitsLoss with per-class pos_weight
+    Labels    : multi-hot [personal, political, sexual/gendered, threat]
+    Threshold : 0.5 (if no class exceeds 0.5, highest prob class is taken)
+
+CLASS IMBALANCE HANDLING
+  WeightedTrainer (custom subclass of HuggingFace Trainer):
+    - Conflict : compute_class_weight("balanced") → CE weights
+    - Severity : compute_class_weight("balanced") + pad weight[0]=0 → CE weights
+    - Type     : pos_weight[i] = neg_count[i] / pos_count[i] → BCE pos_weight
+  Class weights are computed from the TRAINING SPLIT only (no leakage).
+
+TRAINING HYPERPARAMETERS
+  Epochs         : 5
+  Batch size     : 16 (per device)
+  Learning rate  : 2e-5
+  Warmup ratio   : 0.1
+  Weight decay   : 0.01
+  Max token len  : 256
+  Optimizer      : AdamW (HuggingFace default)
+  Precision      : fp16 (on GPU)
+  Early stopping : EarlyStoppingCallback(patience=2)  [where checkpoints used]
+  Best model     : tracked in-memory via BestModelInMemory callback
+                   (to avoid Kaggle disk-space issues)
+
+TRAINING INFRASTRUCTURE
+  Local (dry-run)  : CPU, Windows 11, Python 3.11
+  Production       : Kaggle Notebook, GPU T4 x2, Python 3.12
+  HuggingFace v    : transformers 5.0.0 (Kaggle), 4.x (local)
+
+EVALUATION METRICS
+  Primary   : macro F1 (used for model selection and early stopping)
+  Secondary : accuracy, MAE (severity only)
+  Conflict  : also Matthews Correlation Coefficient (MCC)
+  Type      : exact-match accuracy + per-class F1 (multi-label)
+
+================================================================================
+  4. RESULTS
+================================================================================
+
+CONFLICT DETECTION  (test set, n=252)
+  ┌──────────────┬───────────┬──────────┬──────────┬─────────┐
+  │ Class        │ Precision │ Recall   │ F1-score │ Support │
+  ├──────────────┼───────────┼──────────┼──────────┼─────────┤
+  │ no_conflict  │   0.89    │   0.79   │   0.83   │   173   │
+  │ conflict     │   0.63    │   0.78   │   0.70   │    79   │
+  ├──────────────┼───────────┼──────────┼──────────┼─────────┤
+  │ macro avg    │   0.76    │   0.79   │   0.77   │   252   │
+  │ accuracy     │                      │   0.79   │   252   │
+  └──────────────┴───────────┴──────────┴──────────┴─────────┘
+  Notes: Achieved with MuRIL-base-cased, 5 epochs, 1,168 training samples.
+         Conflict recall (0.78) prioritised over precision — appropriate for
+         a safety detection task where false negatives are more costly.
+
+SEVERITY CLASSIFICATION  (test set, conflict=1 only, n=79)
+  macro F1 ≈ 0.24  — poor performance
+  Root causes:
+    (a) Only 519 conflict=1 samples split across 3 severity classes (~173/class)
+    (b) Models in models/ are unconverged (classifier.weight mean_abs ≈ 0.016,
+        should be >0.1) — training run did not use BestModelInMemory callback
+    (c) 26/79 test samples with severity=0 are NOT annotation errors — they are
+        legitimate mild-severity rows (annotation_FINAL.csv uses 1/2/3; preprocess.py
+        remaps 1→0, 2→1, 3→2 for 0-indexed training; annotation_FINAL.csv has
+        zero conflict=1 rows with blank or zero severity)
+  Action required: retrain severity model on Kaggle using BestModelInMemory
+                   callback (already wired in kaggle_train.ipynb, 10 epochs).
+
+TYPE CLASSIFICATION  (multi-label, test set, conflict=1 only)
+  Full results not recovered — run failed before type evaluation printed.
+  Qualitative: personal attacks dominate (69% of labels), type classifier
+  will struggle with rare classes (threat: 2.7%, multi-label: <1%).
+
+INFERENCE PIPELINE
+  Input  : any comment thread as text
+  Step 1 : conflict model → is there conflict? (binary)
+  Step 2 : if yes → severity model → how bad? (4-class)
+  Step 3 : if yes → type model → what kind? (multi-label)
+  Script : src/predict.py
+
+================================================================================
+  5. CODE STRUCTURE
+================================================================================
+
+src/
+  scrape_youtube.py   YouTube Data API v3 scraper
+  annotate.py         Interactive CLI annotation tool
+  adjudicate.py       Inter-annotator disagreement resolution
+  train.py            Fine-tuning pipeline (all 3 tasks)
+  predict.py          Inference (single thread or batch JSONL)
+
+scripts/
+  make_batch.py       Generate new annotation batches from unannotated threads
+  export_final.py     Merge all annotation_batch_*.csv → annotation_FINAL.csv
+  preprocess.py       Clean data + stratified train/val/test split
+  spotcheck.py        Quick stats + sample inspection of raw threads
+  merge_jsonl.py      Deduplicate and merge multiple raw JSONL files
+  adjudicate.py       Resolve annotation disagreements
+  export_pilot.py     Export 30-thread pilot annotation batch
+
+evaluation/
+  metrics.py          Conflict / severity / type report functions (sklearn)
+  kappa.py            Cohen's κ calculation
+
+annotation/
+  schema.json         Label schema definition
+  guidelines.md       Annotation rules reference
+
+data/
+  raw_threads.jsonl           All scraped threads (1,672)
+  new_threads_batch.jsonl     Additional scraped threads (30)
+  seeds.jsonl                 Seed video IDs for scraping
+  annotations/
+    annotation_batch_adithyanr.csv   Batch 1 (A0001–A0551)
+    annotation_batch_adithyanr2.csv  Batch 2 (A0552–A0851)
+    annotation_batch_adithyanr3.csv  Batch 3 (A0852–A1151)
+    annotation_batch_adithyanr4.csv  Batch 4 (A1152–A1451)
+    annotation_batch_adithyanr5.csv  Batch 5 (A1452–A1672)
+    annotation_FINAL.csv             Merged training file (1,672 rows)
+    ANNOTATION_GUIDE.txt             Annotator instructions
+  splits/
+    clean.csv   Full cleaned dataset (1,669 rows)
+    train.csv   Training split (1,168 rows)
+    val.csv     Validation split (249 rows)
+    test.csv    Test split (252 rows)
+
+models/
+  conflict/best/    Fine-tuned conflict classifier (MuRIL)
+  severity/best/    Fine-tuned severity classifier (MuRIL)
+  type/best/        Fine-tuned type classifier (MuRIL)
+
+notebooks/
+  kaggle_train.ipynb   Self-contained GPU training notebook for Kaggle
+
+================================================================================
+  6. KEY DESIGN DECISIONS & RATIONALE
+================================================================================
+
+WHY THREAD-LEVEL (not comment-level) ANNOTATION
+  Conflict in Manglish comments is often contextual — a reply that looks
+  innocent in isolation becomes a targeted attack when read with the parent
+  comment. Thread-level framing captures this better and matches how real
+  moderation decisions are made.
+
+WHY MULTI-TASK (not single model)
+  Severity and type are only meaningful when conflict=1. Training separate
+  models avoids polluting the conflict signal with severity/type objectives
+  and allows independent deployment (e.g., use only conflict model for
+  lightweight filtering, add severity for escalation routing).
+
+WHY WEIGHTED LOSS (not oversampling)
+  Oversampling (SMOTE) on text data with a transformer tokenizer is complex
+  and can introduce artefacts. Weighted CE/BCE loss directly addresses
+  class imbalance without modifying the data distribution, and is naturally
+  compatible with HuggingFace Trainer.
+
+WHY MULTI-HOT FOR TYPE (not single-label)
+  A single comment can be simultaneously personal AND political AND sexual.
+  Forcing a single label would lose this information and reduce the utility
+  of the type classifier for fine-grained moderation policies.
+
+WHY MuRIL OVER XLM-RoBERTa
+  MuRIL was trained on 17 Indian languages including transliterated (Roman
+  script) variants of Malayalam. XLM-RoBERTa's training corpus is Wikipedia-
+  dominant and has minimal Manglish content. MuRIL's tokenizer also has a
+  larger vocabulary (197k vs 250k for XLM-R but better Indian coverage).
+
+================================================================================
+  7. ANNOTATION WORKFLOW (end-to-end)
+================================================================================
+
+STEP 1 — SCRAPE
+  python src/scrape_youtube.py
+  → data/raw_threads.jsonl
+
+STEP 2 — MERGE (if multiple scrape files)
+  python scripts/merge_jsonl.py data/raw_A.jsonl data/raw_B.jsonl
+  → data/raw_threads.jsonl (deduplicated)
+
+STEP 3 — CREATE ANNOTATION BATCH
+  python scripts/make_batch.py --count 300 --annotator NAME
+  → data/annotations/annotation_batch_NAME.csv
+
+STEP 4 — ANNOTATE
+  python src/annotate.py --annotator NAME
+  (s=skip, b=back, q=save-and-quit, resumes where left off)
+
+STEP 5 — MERGE ALL BATCHES → FINAL CSV
+  python scripts/export_final.py
+  → data/annotations/annotation_FINAL.csv
+
+STEP 6 — PREPROCESS + SPLIT
+  python scripts/preprocess.py
+  → data/splits/train.csv, val.csv, test.csv, clean.csv
+
+STEP 7 — TRAIN (local, CPU, dry-run)
+  python src/train.py --task conflict --epochs 1 --model xlm-roberta-base
+
+STEP 8 — TRAIN (Kaggle GPU, production)
+  Upload data/splits/ to Kaggle dataset "malayalamcybercon"
+  Run notebooks/kaggle_train.ipynb on GPU T4 x2
+  Download malayalamcybercon_models.zip → extract to models/
+
+STEP 9 — INFERENCE
+  python src/predict.py --text "[1] ... [2★] ..."
+  python src/predict.py --csv data/raw_threads.jsonl --output results.csv
+
+================================================================================
+  8. KNOWN ISSUES & PENDING WORK
+================================================================================
+
+CRITICAL (must fix before paper submission)
+  1. Severity model performance (macro F1 ≈ 0.24):
+     - Root cause: unconverged model + small per-class sample count (~173/class)
+     - Annotation data is clean: annotation_FINAL.csv has 0 conflict=1 rows with
+       blank or zero severity. The "severity=0" in splits is the correct 0-indexed
+       remap of mild (1→0) by preprocess.py — not an error.
+     - Fix: retrain severity model on Kaggle using kaggle_train.ipynb (BestModelInMemory
+       callback + 10 epochs already configured)
+
+  2. Models in models/ are from an unconverged training run:
+     - classifier.weight mean abs = 0.016 (near-initialization, should be >0.1)
+     - Fix: retrain on Kaggle using BestModelInMemory callback (no disk writes)
+     - Expected conflict F1 ≥ 0.75 based on first successful run
+
+  3. Batch 5 entries A1485–A1672 (~188 threads):
+     - Auto-annotated as conflict=0 without reading the actual text
+     - Should be reviewed and corrected manually
+
+MEDIUM PRIORITY
+  4. No git repository initialised — run `git init` and commit all work
+  5. Type classifier evaluation not completed (run failed before printing)
+  6. label_target not used in current training pipeline
+     (scraping target from annotation CSV, could add a 4th task)
+  7. Multi-label type: only 2 multi-label entries in dataset (too few to
+     train effectively on multi-label) — could treat as single-label with
+     the most salient type
+
+LOW PRIORITY
+  8. predict.py loads models separately for each call — could cache them
+  9. Annotation batch 3 was AI-annotated (by Claude) — should be reviewed
+     by a native Malayali speaker and corrected before final paper
+
+================================================================================
+  9. FUTURE WORK / RESEARCH DIRECTIONS
+================================================================================
+
+  1. LARGER MODEL: Fine-tune muril-large-cased on Kaggle P100/A100 once
+     dataset reaches 2,000+ annotated threads. Expected F1 improvement: +3-5%.
+
+  2. MORE DATA: 1,121 unbatched threads remain in raw data. Target: 500+
+     annotated conflict threads for severity/type to reach usable performance.
+
+  3. INTER-ANNOTATOR AGREEMENT: Current pilot kappa (0.71 conflict, 0.41
+     severity) meets minimum thresholds but is not high. A third annotator
+     pass on ambiguous cases would improve label quality.
+
+  4. CROSS-DOMAIN EVALUATION: Test on non-YouTube Manglish data (WhatsApp
+     screenshots, Facebook comments) to measure domain shift.
+
+  5. EXPLAINABILITY: Add attention visualization or SHAP to show which tokens
+     triggered conflict detection — useful for the paper and for annotator
+     calibration.
+
+  6. LABEL_TARGET TASK: Add target classification (commenter / public figure
+     / community) as Task 4. Data is already annotated for this.
+
+  7. DEPLOYMENT: Wrap predict.py as a FastAPI endpoint or browser extension
+     for real-time YouTube comment moderation.
+
+================================================================================
+  10. HOW TO START A NEW SESSION WITH FULL CONTEXT
+================================================================================
+
+  Give this file to the new session. Key commands to run first:
+
+  # Verify data state
+  python -c "
+  import csv
+  rows = list(csv.DictReader(open('data/annotations/annotation_FINAL.csv', encoding='utf-8-sig')))
+  print(f'Annotation FINAL: {len(rows)} rows')
+  c1 = sum(1 for r in rows if r[\"label_conflict\"]==\"1\")
+  print(f'conflict=1: {c1}  conflict=0: {len(rows)-c1}')
+  "
+
+  # Verify splits exist
+  python -c "
+  from pathlib import Path
+  for f in ['train','val','test','clean']:
+      p = Path(f'data/splits/{f}.csv')
+      print(f'{f}: {sum(1 for _ in p.open())-1} rows' if p.exists() else f'{f}: MISSING')
+  "
+
+  # Check model state
+  python -c "
+  from safetensors import safe_open
+  from pathlib import Path
+  for task in ['conflict','severity','type']:
+      with safe_open(f'models/{task}/best/model.safetensors', framework='pt', device='cpu') as f:
+          w = f.get_tensor('classifier.weight')
+          print(f'{task} classifier weight mean_abs={w.abs().mean():.4f}  shape={w.shape}')
+  "
+  # If mean_abs < 0.05 for any task → model is untrained, need to retrain on Kaggle
+
+  # Run inference test
+  python src/predict.py --text "[1] poda thayoli [2★] ninte ammayude poor"
+
+================================================================================
+  11. DEPENDENCIES
+================================================================================
+
+  Python        3.11+
+  transformers  4.34+ (5.0.0 on Kaggle)
+  torch         2.0+
+  datasets      (HuggingFace, optional)
+  scikit-learn  1.3+
+  safetensors   0.4+
+  google-api-python-client  (for YouTube scraping)
+
+  Install:
+    pip install transformers accelerate scikit-learn safetensors
+    pip install google-api-python-client
+
+================================================================================
+  12. CITATION / REFERENCE INFO
+================================================================================
+
+  Dataset name   : MalayalamCyberCon
+  Task           : Multi-label conflict detection in Manglish YouTube comments
+  Languages      : Malayalam (Roman script / Manglish), English, code-mixed
+  Size           : 1,672 threads raw; 1,669 after cleaning (conflict=1: 519, conflict=0: 1,150)
+  Platform       : YouTube
+  Annotation     : 2 human annotators + AI-assisted batches 3-5
+  Pilot kappa    : 0.712 (conflict), 0.405 (severity)
+  Base model     : google/muril-base-cased
+  Conflict F1    : 0.77 macro (test set, n=252)
+  Severity F1    : ~0.24 macro (test set, n=79) — unconverged model, retrain pending
+  Type F1        : not yet evaluated (run failed before printing)
+  Code           : [your GitHub repo once created]
+  Contact        : adithyanadi089@gmail.com
+
+================================================================================
+  END OF DOCUMENT
+  Generated: 2026-05-29
+================================================================================

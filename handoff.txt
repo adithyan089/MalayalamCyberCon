@@ -1,0 +1,292 @@
+MalayalamCyberCon — Project Handoff
+=====================================
+
+Project: Final-year NLP project. Conflict and cyberbullying detection in Malayalam/Manglish YouTube comment threads.
+Goal: Build a dataset of annotated comment threads, then train a classifier to detect conflict and its severity.
+Language: Manglish — Malayalam written in Roman script, or mixed Malayalam script + Roman (code-mixed).
+
+
+WHAT HAS BEEN BUILT (COMPLETED)
+---------------------------------
+
+1. YouTube Scraper — src/scrape_youtube.py
+   - Hits YouTube Data API v3 (commentThreads.list) with a user-supplied API key (never hardcoded — always read from YT_API_KEY environment variable)
+   - Filters threads to Manglish only (romanized Malayalam markers — Malayalam Unicode script alone does NOT qualify as Manglish)
+   - Detects conflict via CONFLICT_KEYWORDS dict mapping 183 keywords to intensity score 1-5
+   - Applies spelling normalization (_SPELLING_NORMS) before matching (handles mairu/mypre/maire -> myre, thayoly -> thayoli, etc.)
+   - Anonymizes author names consistently per thread (@user1, @user2, ...)
+   - Strips HTML entities, <br> tags, URLs, channel mentions
+   - Writes idempotent JSONL output to data/raw_threads.jsonl (skips duplicate thread_ids on re-run)
+   - Exits cleanly on quota exceeded (HTTP 403 quotaExceeded), skips disabled/private videos silently
+   - Thread filter: >= 3 messages, >= 1 reply, final message must be Manglish
+
+   Output JSON schema per thread:
+   {
+     "thread_id": "Ugw...",
+     "video_id": "kD1KRq9Cw2I",
+     "messages": ["[1] text", "[2] text", "[3*] text"],
+     "target_index": 2,
+     "likely_conflict": true,
+     "conflict_intensity": 3,
+     "topic": "politics"
+   }
+
+2. Unit Tests — tests/test_scrape_youtube.py
+   - 26 tests, all passing
+   - Tests: spelling normalization, intensity scoring, Manglish detection, anonymization, URL stripping, schema validation, full API response pipeline
+   - Run with: python -m pytest tests/
+
+3. Dataset — data/raw_threads.jsonl
+   - 210 threads currently scraped
+   - 41 conflict, 169 non-conflict
+   - Intensity distribution: 169 none / 27 mild / 7 insult / 3 political / 3 slur / 1 threat
+   - Seeded from data/seed_videos.txt (~50 Malayalam YouTube video IDs)
+
+4. Pilot Export — scripts/export_pilot.py
+   - Selects 30 threads for pilot annotation:
+     * All intensity >= 3 (definite conflict)
+     * All intensity 2 (likely conflict)
+     * Top 6 intensity-1 by message count (borderline)
+     * 10 random intensity-0 (seed=42, for balance)
+   - Outputs:
+     * data/pilot_annotation.csv  — for annotators (no auto scores, no bias)
+     * data/pilot_key.csv         — for team lead (includes auto_intensity)
+
+5. Annotation Guidelines — annotation/guidelines.md
+   - Full task description, conflict YES/NO rules, severity scale (0-3), type scale (1-4)
+   - 4 worked examples (A-D) covering each severity level
+   - 7 ground rules including code-mixed text handling
+   - Quick reference card
+
+6. Interactive Annotation Tool — scripts/annotate.py
+   - Usage: python scripts/annotate.py --annotator yourname
+   - Reads data/pilot_annotation.csv, saves to data/annotations/pilot_annotation_<name>.csv
+   - Shows one thread at a time, clear screen, progress display
+   - Saves after every label (safe to Ctrl+C and resume)
+   - Supports: back button (b), confirm/redo (y/n), input validation
+   - Collects three labels per thread when conflict=1:
+       label_conflict (0/1), label_severity (1-3), label_type (1-4)
+
+7. Cohen's kappa Script — evaluation/kappa.py
+   - Usage: python evaluation/kappa.py
+   - Reads all data/annotations/pilot_annotation_*.csv automatically
+   - Pairwise Cohen's kappa for label_conflict, label_severity, and label_type
+   - label_type kappa computed only on conflict=1 threads (where it is defined)
+   - Fleiss' kappa when 3+ annotators
+   - Percent agreement table for all three labels
+   - Disagreement table: lists every thread where annotators differ (for adjudication)
+   - Collects all annotator notes in one place
+
+8. Adjudication Tool — scripts/adjudicate.py
+   - Usage: python scripts/adjudicate.py --adjudicator yourname
+   - Reads all annotator CSVs and pilot_annotation.csv
+   - Auto-resolves threads where all annotators agree (majority vote)
+   - Shows only disputed threads one at a time with all annotator labels side by side
+     (conflict, severity, AND type shown per annotator)
+   - Flags disagreements on any of the three labels for review
+   - Supports: save (y), redo (n), back (b), skip (s) — saves progress after every decision
+   - Outputs: data/annotations/pilot_annotation_FINAL.csv (ready for training)
+
+9. Evaluation Metrics — evaluation/metrics.py
+   - conflict_report(): binary F1, precision, recall, MCC
+   - severity_report(): per-class F1, weighted F1, MAE (mean absolute error for ordinal labels)
+   - Pretty confusion matrix printer for both tasks
+   - Used by train.py automatically during evaluation
+
+10. Training Script — src/train.py
+    - Fine-tunes XLM-RoBERTa (or any HuggingFace model) on annotated threads
+    - Trains conflict classifier (binary) and severity classifier (4-class: 0-3) separately
+    - Stratified 70/15/15 train/val/test split
+    - Early stopping on validation macro F1
+    - Prints full classification report + confusion matrix on test set after training
+    - Saves best checkpoint to models/conflict/best/ and models/severity/best/
+    - Swap dataset by passing --data flag — no other changes needed
+
+    Usage:
+      python src/train.py                                      # both tasks, default settings
+      python src/train.py --task conflict                      # conflict only
+      python src/train.py --task severity                      # severity only
+      python src/train.py --data path/to/bigger_dataset.csv   # use larger annotated CSV
+      python src/train.py --model google/muril-base-cased     # use MuRIL instead of XLM-R
+      python src/train.py --epochs 5 --batch 8 --lr 2e-5      # full training settings
+
+11. Inference Script — src/predict.py
+    - Loads saved conflict + severity models and predicts on new thread text
+    - Single thread: python src/predict.py --text "thread text here"
+    - Batch: python src/predict.py --csv data/raw_threads.jsonl --output data/predictions.csv
+    - Outputs: conflict (0/1), confidence, severity (0-3), severity label, severity confidence
+    - Runs conflict model first; only runs severity model if conflict=1
+
+
+LABEL SCHEMA (3 labels per thread)
+------------------------------------
+
+label_conflict — binary, all threads
+  0 = no conflict
+  1 = conflict (direct interpersonal hostility between commenters)
+
+label_severity — ordinal, only when conflict=1
+  1 = mild        (poda, dismissive, passive-aggressive)
+  2 = moderate    (direct insult: mandan, kalla, koothara)
+  3 = severe      (slur, threat, sexual harassment: myre, thayoli, vedi...)
+
+label_type — categorical, only when conflict=1
+  1 = personal insult       (mandan, pottan, character/intelligence attack)
+  2 = political/ideological (chanakam, targeted political abuse at commenter)
+  3 = sexual/gendered       (objectification, sexual harassment directed at user)
+  4 = threat                (veettil keri thallum — overrides all other types)
+
+Rules:
+  - If label_conflict = 0, leave label_severity and label_type blank
+  - If label_conflict = 1, both label_severity AND label_type must be filled
+  - If thread contains a threat (type 4), label_type = 4 regardless of other types
+  - Rate severity on the worst single message in the thread
+  - Rate type on the dominant/most severe form of hostility
+
+NOTE: The existing pilot_annotation_FINAL.csv (30 threads) was annotated before
+label_type was added, so label_type is blank for those rows. Re-run adjudicate.py
+after new annotators complete their files to backfill label_type for all threads.
+
+
+PILOT ANNOTATION RESULTS
+--------------------------
+
+Annotators: adithyanr, adithyarajesh
+Threads labeled: 30
+
+Inter-annotator agreement (Cohen's kappa):
+  label_conflict : kappa = 0.712  [Substantial]   93.3% exact agreement
+  label_severity : kappa = 0.405  [Moderate]      56.7% exact agreement
+  label_type     : not yet computed (label_type added after pilot round)
+
+Targets: conflict >= 0.60 (PASS), severity >= 0.40 (PASS), type >= 0.40 (pending)
+
+Adjudicated final dataset (data/annotations/pilot_annotation_FINAL.csv):
+  Total: 30 threads
+  Conflict = 1: 25    Conflict = 0: 5
+  Severity — none: 5 / mild: 6 / moderate: 11 / severe: 8
+  Auto-resolved: 17   Manually adjudicated: 13
+
+
+CURRENT STATUS
+---------------
+
+[DONE] Scraper built and tested
+[DONE] 210 threads scraped to data/raw_threads.jsonl
+[DONE] Pilot 30 threads exported to data/pilot_annotation.csv
+[DONE] Annotation guidelines written
+[DONE] Interactive annotation CLI built
+[DONE] Pilot annotation completed (2 annotators, 30 threads each)
+[DONE] Cohen's kappa computed — conflict 0.712, severity 0.405
+[DONE] Adjudication completed — pilot_annotation_FINAL.csv ready
+[DONE] Evaluation metrics module built
+[DONE] Training script built and dry-run verified (conflict F1=0.76 on 30 samples)
+[DONE] Inference script built and tested end-to-end
+[TODO] Teammate to scrape more threads (target: 600-700 total) and annotate
+[TODO] Re-run training with full dataset (target: 500+ annotated threads)
+[TODO] Kaggle notebook for GPU training
+
+
+SETUP
+------
+
+pip install -r requirements.txt
+(includes: google-api-python-client, torch, transformers, datasets, accelerate, scikit-learn, pytest)
+
+NOTE: On Windows, enable Long Path support before installing torch:
+   Run PowerShell as Administrator and execute:
+   Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem' -Name 'LongPathsEnabled' -Value 1
+   Then restart terminal and pip install.
+
+Set API key (NEVER hardcode it):
+   PowerShell:  $env:YT_API_KEY = "your_key_here"
+   bash/zsh:    export YT_API_KEY="your_key_here"
+
+
+DATASET TARGETS (for teammate doing more scraping/annotation)
+--------------------------------------------------------------
+
+Total labeled threads needed : 500-800
+Class balance target          : 55-65% conflict, 35-45% non-conflict
+Severity minimum per class    : mild 60+, moderate 80+, severe 40+
+Type minimum per class        : personal 80+, political 40+, sexual 30+, threat 20+
+Train/val/test split          : 70 / 15 / 15 (stratified, handled automatically by train.py)
+
+Current gap:
+  Scraped   : 210 threads (need 600-700)
+  Annotated : 30 threads  (need 500+)
+  Conflict balance: 83% conflict / 17% non-conflict (too skewed — add non-conflict videos)
+
+What to scrape more of:
+  - Cooking channels, travel vlogs, film appreciation — civil comment sections = non-conflict
+  - Avoid political/news videos (already over-represented in conflict class)
+
+IMPORTANT for teammate:
+  - Get a copy of data/raw_threads.jsonl before scraping (so duplicate-skip works)
+  - Use your own YT_API_KEY (10,000 units/day free)
+  - Do NOT re-run scripts/export_pilot.py (pilot CSV is fixed)
+  - Annotate using the same data/pilot_annotation.csv — use a different --annotator name
+
+
+KEY DESIGN DECISIONS
+---------------------
+
+- Manglish detection uses romanized word markers only (aanu, alle, und, etc.)
+  Malayalam Unicode script alone is NOT Manglish.
+
+- Non-conflict threads are kept — only likely_conflict flag is set, nothing is dropped.
+  The model needs negative examples.
+
+- Annotators never see auto_intensity — only pilot_key.csv (team lead) has it,
+  to prevent anchoring bias.
+
+- Intensity is max across all messages — one severe message anywhere in the thread
+  counts as severity 3 for the whole thread.
+
+- "poor" alone does NOT trigger intensity 5 — only "ninte ammayude poor",
+  "ammayude poor", and the Malayalam script form do (prevents false positives like "poor boy").
+
+- API key MUST come from YT_API_KEY env var — never hardcode, never commit.
+
+- Training is dataset-agnostic — pass any adjudicated CSV via --data flag.
+  Models save to models/conflict/best/ and models/severity/best/.
+
+- label_type is only labeled when conflict=1 — kappa.py handles this automatically
+  by computing type kappa only on the conflict=1 subset.
+
+- label_type priority rule: threat (4) overrides all other types if present in thread.
+
+
+FILE MAP
+---------
+
+D:\NLP\
+├── src\
+│   ├── scrape_youtube.py          main scraper
+│   ├── train.py                   fine-tuning script (XLM-RoBERTa)
+│   └── predict.py                 inference on new threads
+├── tests\
+│   └── test_scrape_youtube.py     26 unit tests
+├── scripts\
+│   ├── annotate.py                interactive annotation CLI
+│   ├── adjudicate.py              disagreement resolution tool
+│   ├── export_pilot.py            select 30 pilot threads
+│   └── spotcheck.py               dataset stats + sample viewer
+├── evaluation\
+│   ├── kappa.py                   Cohen's / Fleiss' kappa
+│   └── metrics.py                 F1, MCC, MAE, confusion matrix
+├── annotation\
+│   └── guidelines.md              annotation instructions
+├── data\
+│   ├── seed_videos.txt            ~50 YouTube video IDs
+│   ├── raw_threads.jsonl          210 scraped threads (gitignored)
+│   ├── pilot_annotation.csv       30 threads for annotators
+│   ├── pilot_key.csv              same 30 + auto scores (team lead only)
+│   └── annotations\
+│       ├── pilot_annotation_adithyanr.csv
+│       ├── pilot_annotation_adithyarajesh.csv
+│       └── pilot_annotation_FINAL.csv   <- USE THIS FOR TRAINING
+├── models\
+│   ├── conflict\best\             saved conflict classifier
+│   └── severity\best\             saved severity classifier
+└── requirements.txt
