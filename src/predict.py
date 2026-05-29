@@ -26,13 +26,19 @@ sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 import torch
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
-REPO_ROOT        = Path(__file__).parent.parent
-DEFAULT_CONFLICT = REPO_ROOT / "models" / "conflict" / "best"
-DEFAULT_SEVERITY = REPO_ROOT / "models" / "severity" / "best"
-DEFAULT_TYPE     = REPO_ROOT / "models" / "type"     / "best"
+REPO_ROOT  = Path(__file__).parent.parent
+MODELS_DIR = REPO_ROOT / "models"
 
-SEVERITY_LABELS = {0: "mild", 1: "moderate", 2: "severe"}   # 0-indexed
-TYPE_LABELS     = ["personal", "political", "sexual/gendered", "threat"]  # 0-indexed single-label
+
+def _task_dir(task: str, slug: str | None) -> Path:
+    """models/<slug>/<task>/best  or  models/<task>/best  (legacy MuRIL layout)."""
+    if slug:
+        return MODELS_DIR / slug / task / "best"
+    return MODELS_DIR / task / "best"
+
+SEVERITY_LABELS = {0: "mild", 1: "moderate", 2: "severe"}
+TYPE_LABELS     = ["personal", "political", "sexual/gendered", "threat"]
+TARGET_LABELS   = {0: "commenter", 1: "creator/pub_fig", 2: "community/group"}
 
 
 # ── model loading ─────────────────────────────────────────────────────────────
@@ -191,9 +197,15 @@ def main():
     parser.add_argument("--text",           help="Thread text to classify")
     parser.add_argument("--csv",            help="JSONL file for batch prediction")
     parser.add_argument("--output",         default="data/predictions.csv")
-    parser.add_argument("--conflict-model", default=str(DEFAULT_CONFLICT))
-    parser.add_argument("--severity-model", default=str(DEFAULT_SEVERITY))
-    parser.add_argument("--type-model",     default=str(DEFAULT_TYPE))
+    parser.add_argument("--model-slug",     default=None,
+                        help="Model slug (e.g. xlmr_base). Uses models/<slug>/<task>/best/. "
+                             "Omit to use legacy models/<task>/best/ layout.")
+    parser.add_argument("--conflict-model", default=None,
+                        help="Override conflict model path (takes priority over --model-slug)")
+    parser.add_argument("--severity-model", default=None,
+                        help="Override severity model path")
+    parser.add_argument("--type-model",     default=None,
+                        help="Override type model path")
     parser.add_argument("--max-len",        type=int, default=256)
     args = parser.parse_args()
 
@@ -201,20 +213,25 @@ def main():
         parser.print_help()
         sys.exit(1)
 
+    slug = args.model_slug
+    conflict_path = Path(args.conflict_model) if args.conflict_model else _task_dir("conflict", slug)
+    severity_path = Path(args.severity_model) if args.severity_model else _task_dir("severity", slug)
+    type_path     = Path(args.type_model)     if args.type_model     else _task_dir("type",     slug)
+
     print("Loading conflict model...")
-    conflict_tok, conflict_model = load_model(Path(args.conflict_model))
+    conflict_tok, conflict_model = load_model(conflict_path)
     if conflict_tok is None:
         print("[ERROR] Conflict model is required.")
         sys.exit(1)
 
     print("Loading severity model...")
-    severity_tok, severity_model = load_model(Path(args.severity_model))
+    severity_tok, severity_model = load_model(severity_path)
     if severity_tok is None:
         print("[ERROR] Severity model is required.")
         sys.exit(1)
 
     print("Loading type model...")
-    type_tok, type_model = load_model(Path(args.type_model))
+    type_tok, type_model = load_model(type_path)
     if type_tok is None:
         print("[WARN] Type model not found — type prediction disabled.")
 
